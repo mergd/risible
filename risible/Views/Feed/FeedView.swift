@@ -16,6 +16,7 @@ struct FeedView: View {
     @State private var selectedCategoryIndex = 0
     @State private var showAddFeedSheet = false
     @State private var selectedCategory: Category?
+    @State private var hiddenItemURLs: Set<String> = []
     
     var body: some View {
         NavigationStack {
@@ -66,32 +67,18 @@ struct FeedView: View {
                         }
                     }
                     
-                    HStack(spacing: 12) {
-                        Button {
-                            Task {
-                                await viewModel.refreshFeeds(for: nil, modelContext: modelContext)
-                            }
-                        } label: {
-                            Image(systemName: viewModel.isLoading ? "arrow.clockwise.circle.fill" : "arrow.clockwise")
-                                .font(.system(size: 16))
-                                .symbolEffect(.rotate, isActive: viewModel.isLoading)
+                    Button {
+                        if selectedCategoryIndex == 0 {
+                            selectedCategory = categories.first ?? createDefaultCategory()
+                        } else {
+                            selectedCategory = categories[safe: selectedCategoryIndex - 1]
                         }
-                        .foregroundStyle(.blue)
-                        .disabled(viewModel.isLoading)
-                        
-                        Button {
-                            if selectedCategoryIndex == 0 {
-                                selectedCategory = categories.first
-                            } else {
-                                selectedCategory = categories[safe: selectedCategoryIndex - 1]
-                            }
-                            showAddFeedSheet = true
-                        } label: {
-                            Image(systemName: "plus")
-                                .font(.system(size: 16))
-                        }
-                        .foregroundStyle(.blue)
+                        showAddFeedSheet = true
+                    } label: {
+                        Image(systemName: "plus")
+                            .font(.system(size: 16))
                     }
+                    .foregroundStyle(.blue)
                     .padding(.trailing, 16)
                 }
                 .background(.ultraThinMaterial)
@@ -121,6 +108,12 @@ struct FeedView: View {
                 }
             }
         }
+    }
+    
+    private func createDefaultCategory() -> Category {
+        let defaultCategory = Category(name: "Uncategorized", colorHex: "#999999")
+        modelContext.insert(defaultCategory)
+        return defaultCategory
     }
 }
 

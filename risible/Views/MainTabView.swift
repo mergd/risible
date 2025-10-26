@@ -11,7 +11,7 @@ import SwiftData
 struct MainTabView: View {
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @State private var selectedTab = 0
-    let appSettings = AppSettings.shared
+    @State private var appSettings = AppSettings.shared
     
     var body: some View {
         if !appSettings.hasCompletedOnboarding {

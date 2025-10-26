@@ -38,6 +38,7 @@ enum RSSServiceError: LocalizedError {
     case timeout
     case noConnection
     case cancelled
+    case invalidStatusCode(Int)
     
     var errorDescription: String? {
         switch self {
@@ -71,6 +72,8 @@ enum RSSServiceError: LocalizedError {
             return "No internet connection available"
         case .cancelled:
             return "Feed request was cancelled"
+        case .invalidStatusCode(let code):
+            return "Server returned error \(code) - the feed URL may be invalid or the server is not responding correctly"
         }
     }
 }
@@ -95,10 +98,19 @@ final class LocalRSSService: NSObject, RSSServiceProtocol {
         }
         
         do {
-            let (data, _) = try await urlSession.data(from: feedURL)
+            let (data, response) = try await urlSession.data(from: feedURL)
             guard !data.isEmpty else {
                 throw RSSServiceError.noData
             }
+            
+            guard let httpResponse = response as? HTTPURLResponse else {
+                throw RSSServiceError.networkError(NSError(domain: "com.risible.rss", code: 0, userInfo: [NSLocalizedDescriptionKey: "Unexpected response type"]))
+            }
+            
+            guard (200...299).contains(httpResponse.statusCode) else {
+                throw RSSServiceError.invalidStatusCode(httpResponse.statusCode)
+            }
+            
             return try await parseFeed(data: data)
         } catch let error as URLError {
             switch error.code {

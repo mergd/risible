@@ -11,31 +11,145 @@ import SwiftData
 struct AddFeedSheet: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.colorScheme) private var colorScheme
     
     let category: Category
     
     @State private var viewModel = SettingsViewModel()
     @State private var url = ""
-    @State private var errorMessage: String?
-    @State private var showPreview = false
+    @State private var nickname = ""
+    @State private var selectedRefreshInterval: TimeInterval = 3600
+    @State private var enableNotifications = false
+    @State private var isSubmitting = false
+    @State private var feedTitle: String?
+    @State private var feedDescription: String?
+    @State private var feedLoaded = false
+    
+    @Query(sort: \Category.sortOrder) private var categories: [Category]
+    
+    private var systemGray6: Color {
+        #if os(iOS)
+        Color(uiColor: .systemGray6)
+        #else
+        Color(nsColor: .systemGray6)
+        #endif
+    }
+    
+    private let refreshIntervals: [(label: String, value: TimeInterval)] = [
+        ("15 minutes", 15 * 60),
+        ("30 minutes", 30 * 60),
+        ("1 hour", 3600),
+        ("3 hours", 3 * 3600),
+        ("6 hours", 6 * 3600),
+        ("12 hours", 12 * 3600),
+        ("24 hours", 24 * 3600),
+    ]
     
     var body: some View {
         NavigationStack {
-            Form {
-                Section("Feed URL") {
-                    TextField("Feed URL", text: $url)
-                        #if os(iOS)
-                        .textInputAutocapitalization(.never)
-                        .keyboardType(.URL)
-                        #endif
-                        .autocorrectionDisabled()
-                }
-                
-                if let error = errorMessage {
-                    Section {
-                        Text(error)
-                            .foregroundStyle(.red)
-                            .font(.caption)
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    Form {
+                        Section("Feed URL") {
+                            TextField("Feed URL", text: $url)
+                                #if os(iOS)
+                                .textInputAutocapitalization(.never)
+                                .keyboardType(.URL)
+                                #endif
+                                .autocorrectionDisabled()
+                        }
+                        
+                        if let error = viewModel.errorMessage {
+                            Section {
+                                Text(error)
+                                    .foregroundStyle(.red)
+                                    .font(.caption)
+                            }
+                        }
+                        
+                        if feedLoaded, let title = feedTitle {
+                            Section("Feed Info") {
+                                VStack(alignment: .leading, spacing: 8) {
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        Text("Title")
+                                            .font(.caption)
+                                            .foregroundStyle(.secondary)
+                                        Text(title)
+                                            .font(.body.weight(.semibold))
+                                    }
+                                    
+                                    if let description = feedDescription {
+                                        Divider()
+                                            .padding(.vertical, 8)
+                                        
+                                        VStack(alignment: .leading, spacing: 4) {
+                                            Text("Description")
+                                                .font(.caption)
+                                                .foregroundStyle(.secondary)
+                                            Text(description)
+                                                .font(.caption)
+                                                .lineLimit(3)
+                                        }
+                                    }
+                                }
+                                .padding(.vertical, 4)
+                            }
+                            
+                            Section("Category") {
+                                if categories.isEmpty {
+                                    Text("No categories available")
+                                        .foregroundStyle(.secondary)
+                                } else {
+                                    Picker("Category", selection: Binding(
+                                        get: { category },
+                                        set: { _ in }
+                                    )) {
+                                        ForEach(categories) { cat in
+                                            Text(cat.name).tag(cat)
+                                        }
+                                    }
+                                }
+                            }
+                            
+                            Section("Feed Details") {
+                                TextField("Nickname (optional)", text: $nickname)
+                                    #if os(iOS)
+                                    .textInputAutocapitalization(.words)
+                                    #endif
+                            }
+                            
+                            Section("Notifications") {
+                                Toggle("Notify about new articles", isOn: $enableNotifications)
+                            }
+                            
+                            Section {
+                                DisclosureGroup("Advanced Options") {
+                                    Picker("Check for new articles every", selection: $selectedRefreshInterval) {
+                                        ForEach(refreshIntervals, id: \.value) { interval in
+                                            Text(interval.label).tag(interval.value)
+                                        }
+                                    }
+                                    .pickerStyle(.menu)
+                                }
+                            }
+                        }
+                    }
+                    
+                    if feedLoaded && !viewModel.previewItems.isEmpty {
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("Preview")
+                                .font(.headline)
+                                .padding(.horizontal)
+                                .padding(.top, 16)
+                            
+                            LazyVStack(spacing: 12) {
+                                ForEach(viewModel.previewItems, id: \.link) { item in
+                                    PreviewItemCard(item: item)
+                                }
+                            }
+                            .padding(.horizontal)
+                            .padding(.bottom)
+                        }
                     }
                 }
             }
@@ -44,70 +158,93 @@ struct AddFeedSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
-                    Button("Cancel") {
-                        dismiss()
-                    }
-                }
-                
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    if viewModel.isLoadingPreview {
-                        ProgressView()
-                    } else {
-                        Button("Next") {
-                            Task {
-                                await loadPreview()
-                            }
-                        }
-                        .disabled(url.isEmpty)
+                    Button(action: { dismiss() }) {
+                        Image(systemName: "xmark")
                     }
                 }
             }
             #else
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") {
-                        dismiss()
-                    }
-                }
-                
-                ToolbarItem(placement: .confirmationAction) {
-                    if viewModel.isLoadingPreview {
-                        ProgressView()
-                    } else {
-                        Button("Next") {
-                            Task {
-                                await loadPreview()
-                            }
-                        }
-                        .disabled(url.isEmpty)
+                    Button(action: { dismiss() }) {
+                        Image(systemName: "xmark")
                     }
                 }
             }
             #endif
-        }
-        .sheet(isPresented: $showPreview) {
-            URLFeedPreviewSheet(
-                feedURL: url,
-                feedTitle: nil,
-                items: viewModel.previewItems,
-                isLoading: viewModel.isLoadingPreview,
-                viewModel: viewModel,
-                onRefresh: {
-                    await viewModel.loadPreview(for: url)
+            .safeAreaInset(edge: .bottom) {
+                VStack(spacing: 12) {
+                    if !feedLoaded {
+                        Button(action: {
+                            Task {
+                                await previewFeed()
+                            }
+                        }) {
+                            if viewModel.isLoadingPreview {
+                                ProgressView()
+                            } else {
+                                Text("Preview Form")
+                            }
+                        }
+                        .buttonStyle(.bordered)
+                        .disabled(url.isEmpty || viewModel.isLoadingPreview)
+                    } else {
+                        Button(action: {
+                            Task {
+                                await submitFeed()
+                            }
+                        }) {
+                            if isSubmitting {
+                                ProgressView()
+                            } else {
+                                Text("Submit")
+                            }
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .disabled(isSubmitting || categories.isEmpty)
+                    }
                 }
-            )
+                .padding()
+                .background {
+                    VStack(spacing: 0) {
+                        Divider()
+                        Color(colorScheme == .dark ? systemGray6.opacity(0.5) : .white)
+                    }
+                }
+            }
         }
     }
     
-    private func loadPreview() async {
-        errorMessage = nil
+    private func previewFeed() async {
+        viewModel.errorMessage = nil
         await viewModel.loadPreview(for: url)
         
-        if !viewModel.previewItems.isEmpty || !viewModel.isLoadingPreview {
-            showPreview = true
-        } else {
-            errorMessage = "Unable to load feed. Please check the URL."
+        if viewModel.errorMessage == nil && !viewModel.previewItems.isEmpty {
+            feedLoaded = true
+            if let firstItem = viewModel.previewItems.first {
+                feedTitle = firstItem.title.prefix(50).description
+            }
         }
+    }
+    
+    private func submitFeed() async {
+        isSubmitting = true
+        
+        do {
+            try await viewModel.addFeed(
+                url: url,
+                nickname: nickname.isEmpty ? nil : nickname,
+                to: category,
+                modelContext: modelContext,
+                enableNotifications: enableNotifications,
+                refreshInterval: selectedRefreshInterval
+            )
+            dismiss()
+        } catch {
+            viewModel.errorMessage = error.localizedDescription
+        }
+        
+        isSubmitting = false
     }
 }
 

@@ -16,6 +16,7 @@ struct CategoryFeedView: View {
     @State private var isRefreshing = false
     @State private var dismissedErrors: Set<String> = []
     @State private var showErrorDialog = false
+    @State private var hiddenItemURLs: Set<String> = []
     
     private var feedItems: [FeedItem] {
         let descriptor: FetchDescriptor<FeedItem>
@@ -83,7 +84,8 @@ struct CategoryFeedView: View {
                 #if os(iOS)
                 feedbackGenerator.notificationOccurred(.success)
                 #endif
-            }
+            },
+            hiddenItemURLs: $hiddenItemURLs
         )
         .sheet(isPresented: $showErrorDialog) {
             FeedErrorDialogView(
@@ -105,6 +107,7 @@ struct AdaptiveFeedLayout: View {
     let onDismissError: (String) -> Void
     let onShowErrorDialog: () -> Void
     let refreshAction: () async -> Void
+    @Binding var hiddenItemURLs: Set<String>
     
     private var columns: [GridItem] {
         #if os(macOS)
@@ -164,7 +167,7 @@ struct AdaptiveFeedLayout: View {
                         if !feedItems.isEmpty {
                             LazyVGrid(columns: columns, spacing: 16) {
                                 ForEach(feedItems.prefix(50)) { item in
-                                    FeedItemCard(item: item)
+                                    FeedItemCard(item: item, hiddenItemURLs: $hiddenItemURLs)
                                         .transition(.opacity.combined(with: .scale(scale: 0.95)))
                                 }
                             }

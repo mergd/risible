@@ -59,30 +59,8 @@ struct FeedPreviewSheet: View {
                 }
                 
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    HStack(spacing: 12) {
-                        if !isLoading {
-                            Button {
-                                Task {
-                                    await refreshPreview()
-                                }
-                            } label: {
-                                Image(systemName: "arrow.clockwise")
-                                    .symbolEffect(.rotate, isActive: isRefreshing)
-                            }
-                            .disabled(isRefreshing)
-                        }
-                        
-                        Button {
-                            showCategoryModal = true
-                        } label: {
-                            if isAdding {
-                                ProgressView()
-                            } else {
-                                Image(systemName: "plus.circle.fill")
-                                    .symbolRenderingMode(.hierarchical)
-                            }
-                        }
-                        .disabled(isAdding)
+                    Button("Done") {
+                        dismiss()
                     }
                 }
             }
@@ -95,30 +73,8 @@ struct FeedPreviewSheet: View {
                 }
                 
                 ToolbarItem(placement: .primaryAction) {
-                    HStack(spacing: 12) {
-                        if !isLoading {
-                            Button {
-                                Task {
-                                    await refreshPreview()
-                                }
-                            } label: {
-                                Image(systemName: "arrow.clockwise")
-                                    .symbolEffect(.rotate, isActive: isRefreshing)
-                            }
-                            .disabled(isRefreshing)
-                        }
-                        
-                        Button {
-                            showCategoryModal = true
-                        } label: {
-                            if isAdding {
-                                ProgressView()
-                            } else {
-                                Image(systemName: "plus.circle.fill")
-                                    .symbolRenderingMode(.hierarchical)
-                            }
-                        }
-                        .disabled(isAdding)
+                    Button("Done") {
+                        dismiss()
                     }
                 }
             }
@@ -425,30 +381,8 @@ struct URLFeedPreviewSheet: View {
                 }
                 
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    HStack(spacing: 12) {
-                        if !isLoading {
-                            Button {
-                                Task {
-                                    await refreshPreview()
-                                }
-                            } label: {
-                                Image(systemName: "arrow.clockwise")
-                                    .symbolEffect(.rotate, isActive: isRefreshing)
-                            }
-                            .disabled(isRefreshing)
-                        }
-                        
-                        Button {
-                            showCategoryModal = true
-                        } label: {
-                            if isAdding {
-                                ProgressView()
-                            } else {
-                                Image(systemName: "plus.circle.fill")
-                                    .symbolRenderingMode(.hierarchical)
-                            }
-                        }
-                        .disabled(isAdding || selectedCategory == nil)
+                    Button("Done") {
+                        dismiss()
                     }
                 }
             }
@@ -461,30 +395,8 @@ struct URLFeedPreviewSheet: View {
                 }
                 
                 ToolbarItem(placement: .primaryAction) {
-                    HStack(spacing: 12) {
-                        if !isLoading {
-                            Button {
-                                Task {
-                                    await refreshPreview()
-                                }
-                            } label: {
-                                Image(systemName: "arrow.clockwise")
-                                    .symbolEffect(.rotate, isActive: isRefreshing)
-                            }
-                            .disabled(isRefreshing)
-                        }
-                        
-                        Button {
-                            showCategoryModal = true
-                        } label: {
-                            if isAdding {
-                                ProgressView()
-                            } else {
-                                Image(systemName: "plus.circle.fill")
-                                    .symbolRenderingMode(.hierarchical)
-                            }
-                        }
-                        .disabled(isAdding || selectedCategory == nil)
+                    Button("Done") {
+                        dismiss()
                     }
                 }
             }

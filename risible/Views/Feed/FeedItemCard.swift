@@ -9,6 +9,7 @@ import SwiftUI
 
 struct FeedItemCard: View {
     let item: FeedItem
+    @Binding var hiddenItemURLs: Set<String>
     @State private var showArticle = false
     @Environment(\.colorScheme) private var colorScheme
     
@@ -122,6 +123,15 @@ struct FeedItemCard: View {
             }
         }
         .buttonStyle(FeedCardButtonStyle())
+        .onLongPressGesture {
+            #if os(iOS)
+            let impactFeedback = UIImpactFeedbackGenerator(style: .medium)
+            impactFeedback.impactOccurred()
+            #endif
+            withAnimation(.easeInOut(duration: 0.2)) {
+                hiddenItemURLs.insert(item.link)
+            }
+        }
         .sheet(isPresented: $showArticle) {
             ArticleWebView(url: item.link, title: item.title)
         }
@@ -148,7 +158,8 @@ struct FeedCardButtonStyle: ButtonStyle {
             itemDescription: "This is a sample description for the article that provides some context about what the article contains.",
             imageURL: nil,
             publishedDate: Date().addingTimeInterval(-3600)
-        )
+        ),
+        hiddenItemURLs: .constant(Set())
     )
     .padding()
 }

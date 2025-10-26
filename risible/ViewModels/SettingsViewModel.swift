@@ -138,11 +138,13 @@ final class SettingsViewModel {
     func loadPreview(for url: String) async {
         isLoadingPreview = true
         previewItems = []
+        errorMessage = nil
         
         do {
             let result = try await rssService.fetchFeed(url: url)
             previewItems = Array(result.items.prefix(10))
         } catch {
+            errorMessage = error.localizedDescription
             print("Error loading preview: \(error)")
         }
         
