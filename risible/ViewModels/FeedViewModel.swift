@@ -12,7 +12,7 @@ import SwiftData
 final class FeedViewModel {
     var selectedCategory: Category?
     var isLoading = false
-    var errorMessage: String?
+    var feedErrors: [String: FeedErrorInfo] = [:]
     
     private let rssService: RSSServiceProtocol
     
@@ -22,16 +22,14 @@ final class FeedViewModel {
     
     func refreshFeeds(for category: Category?, modelContext: ModelContext) async {
         isLoading = true
-        errorMessage = nil
+        feedErrors.removeAll()
         
         defer { isLoading = false }
         
         do {
             if let category = category {
-                // Refresh specific category
                 try await refreshCategory(category, modelContext: modelContext)
             } else {
-                // Refresh all feeds
                 let descriptor = FetchDescriptor<Category>()
                 let categories = try modelContext.fetch(descriptor)
                 
@@ -40,23 +38,24 @@ final class FeedViewModel {
                 }
             }
         } catch {
-            errorMessage = error.localizedDescription
+            // Top-level error
         }
     }
     
     private func refreshCategory(_ category: Category, modelContext: ModelContext) async throws {
         for feed in category.feeds {
+            if feed.isPaused {
+                continue
+            }
+            
             do {
                 let result = try await rssService.fetchFeed(url: feed.url)
                 
-                // Update feed title if needed
                 if feed.title.isEmpty || feed.title != result.title {
                     feed.title = result.title
                 }
                 
-                // Add new items
-                for itemData in result.items.prefix(50) { // Keep only latest 50
-                    // Check if item already exists
+                for itemData in result.items.prefix(50) {
                     let feedID = feed.id
                     let itemLink = itemData.link
                     let existingDescriptor = FetchDescriptor<FeedItem>(
@@ -80,7 +79,6 @@ final class FeedViewModel {
                     }
                 }
                 
-                // Clean up old items (keep only 100 most recent per feed)
                 let feedID = feed.id
                 let itemsDescriptor = FetchDescriptor<FeedItem>(
                     predicate: #Predicate<FeedItem> { item in
@@ -96,12 +94,31 @@ final class FeedViewModel {
                     }
                 }
                 
+                feedErrors.removeValue(forKey: feed.url)
+                
             } catch {
-                print("Error refreshing feed \(feed.url): \(error)")
-                // Continue with other feeds
+                feedErrors[feed.url] = FeedErrorInfo(
+                    feedTitle: feed.displayName,
+                    feedURL: feed.url,
+                    error: error
+                )
             }
         }
         
         try modelContext.save()
+    }
+}
+
+struct FeedErrorInfo {
+    let feedTitle: String
+    let feedURL: String
+    let error: Error
+    
+    var displayMessage: String {
+        if let localizedError = error as? LocalizedError,
+           let description = localizedError.errorDescription {
+            return description
+        }
+        return error.localizedDescription
     }
 }

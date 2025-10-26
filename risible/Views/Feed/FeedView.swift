@@ -14,62 +14,94 @@ struct FeedView: View {
     
     @State private var viewModel = FeedViewModel()
     @State private var selectedCategoryIndex = 0
+    @State private var showAddFeedSheet = false
+    @State private var selectedCategory: Category?
     
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                ScrollViewReader { proxy in
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 12) {
-                            CategoryPill(
-                                title: "All",
-                                color: .blue,
-                                isSelected: selectedCategoryIndex == 0
-                            ) {
-                                #if os(iOS)
-                                let selectionFeedback = UISelectionFeedbackGenerator()
-                                selectionFeedback.selectionChanged()
-                                #endif
-                                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                                    selectedCategoryIndex = 0
-                                }
-                            }
-                            .id(0)
-                            
-                            ForEach(Array(categories.enumerated()), id: \.element.id) { index, category in
+                HStack(spacing: 12) {
+                    ScrollViewReader { proxy in
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 8) {
                                 CategoryPill(
-                                    title: category.name,
-                                    color: category.color,
-                                    isSelected: selectedCategoryIndex == index + 1
+                                    title: "All",
+                                    color: .blue,
+                                    isSelected: selectedCategoryIndex == 0
                                 ) {
                                     #if os(iOS)
                                     let selectionFeedback = UISelectionFeedbackGenerator()
                                     selectionFeedback.selectionChanged()
                                     #endif
                                     withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                                        selectedCategoryIndex = index + 1
+                                        selectedCategoryIndex = 0
                                     }
                                 }
-                                .id(index + 1)
+                                .id(0)
+                                
+                                ForEach(Array(categories.enumerated()), id: \.element.id) { index, category in
+                                    CategoryPill(
+                                        title: category.name,
+                                        color: category.color,
+                                        isSelected: selectedCategoryIndex == index + 1
+                                    ) {
+                                        #if os(iOS)
+                                        let selectionFeedback = UISelectionFeedbackGenerator()
+                                        selectionFeedback.selectionChanged()
+                                        #endif
+                                        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                            selectedCategoryIndex = index + 1
+                                        }
+                                    }
+                                    .id(index + 1)
+                                }
+                            }
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 8)
+                        }
+                        .onChange(of: selectedCategoryIndex) { _, newValue in
+                            withAnimation {
+                                proxy.scrollTo(newValue, anchor: .center)
                             }
                         }
-                        .padding(.horizontal, 20)
-                        .padding(.vertical, 12)
                     }
-                    .background(.ultraThinMaterial)
-                    .onChange(of: selectedCategoryIndex) { _, newValue in
-                        withAnimation {
-                            proxy.scrollTo(newValue, anchor: .center)
+                    
+                    HStack(spacing: 12) {
+                        Button {
+                            Task {
+                                await viewModel.refreshFeeds(for: nil, modelContext: modelContext)
+                            }
+                        } label: {
+                            Image(systemName: viewModel.isLoading ? "arrow.clockwise.circle.fill" : "arrow.clockwise")
+                                .font(.system(size: 16))
+                                .symbolEffect(.rotate, isActive: viewModel.isLoading)
                         }
+                        .foregroundStyle(.blue)
+                        .disabled(viewModel.isLoading)
+                        
+                        Button {
+                            if selectedCategoryIndex == 0 {
+                                selectedCategory = categories.first
+                            } else {
+                                selectedCategory = categories[safe: selectedCategoryIndex - 1]
+                            }
+                            showAddFeedSheet = true
+                        } label: {
+                            Image(systemName: "plus")
+                                .font(.system(size: 16))
+                        }
+                        .foregroundStyle(.blue)
                     }
+                    .padding(.trailing, 16)
                 }
+                .background(.ultraThinMaterial)
                 
                 TabView(selection: $selectedCategoryIndex) {
-                    CategoryFeedView(category: nil)
+                    CategoryFeedView(category: nil, viewModel: viewModel)
                         .tag(0)
                     
                     ForEach(Array(categories.enumerated()), id: \.element.id) { index, category in
-                        CategoryFeedView(category: category)
+                        CategoryFeedView(category: category, viewModel: viewModel)
                             .tag(index + 1)
                     }
                 }
@@ -81,24 +113,20 @@ struct FeedView: View {
             }
             .navigationTitle("Risible")
             #if os(iOS)
-            .navigationBarTitleDisplayMode(.large)
-            .toolbar {
-                if viewModel.isLoading {
-                    ToolbarItem(placement: .topBarTrailing) {
-                        ProgressView()
-                    }
-                }
-            }
-            #else
-            .toolbar {
-                if viewModel.isLoading {
-                    ToolbarItem(placement: .primaryAction) {
-                        ProgressView()
-                    }
-                }
-            }
+            .navigationBarTitleDisplayMode(.inline)
             #endif
+            .sheet(isPresented: $showAddFeedSheet) {
+                if let category = selectedCategory {
+                    AddFeedSheet(category: category)
+                }
+            }
         }
+    }
+}
+
+extension Array {
+    subscript(safe index: Int) -> Element? {
+        return index >= 0 && index < count ? self[index] : nil
     }
 }
 
@@ -111,10 +139,10 @@ struct CategoryPill: View {
     var body: some View {
         Button(action: action) {
             Text(title)
-                .font(.subheadline.weight(.semibold))
+                .font(.caption.weight(.semibold))
                 .foregroundStyle(isSelected ? .white : color)
-                .padding(.horizontal, 20)
-                .padding(.vertical, 10)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 6)
                 .background {
                     Capsule()
                         .fill(isSelected ? color : color.opacity(0.12))

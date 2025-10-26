@@ -11,8 +11,20 @@ import SwiftData
 struct MainTabView: View {
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @State private var selectedTab = 0
+    let appSettings = AppSettings.shared
     
     var body: some View {
+        if !appSettings.hasCompletedOnboarding {
+            OnboardingView {
+                appSettings.hasCompletedOnboarding = true
+            }
+        } else {
+            mainContent
+        }
+    }
+    
+    @ViewBuilder
+    private var mainContent: some View {
         #if os(iPadOS)
         if horizontalSizeClass == .regular {
             iPadSidebarView(selectedTab: $selectedTab)

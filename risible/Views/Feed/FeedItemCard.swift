@@ -75,9 +75,17 @@ struct FeedItemCard: View {
                                 .frame(width: 8, height: 8)
                         }
                         
-                        Text(item.feed?.displayName ?? "Unknown")
-                            .font(.caption.weight(.medium))
-                            .foregroundStyle(.secondary)
+                        HStack(spacing: 4) {
+                            Text(item.feed?.displayName ?? "Unknown")
+                                .font(.caption.weight(.medium))
+                                .foregroundStyle(.secondary)
+                            
+                            if item.feed?.isPaused == true {
+                                Image(systemName: "pause.circle.fill")
+                                    .font(.system(size: 8))
+                                    .foregroundStyle(.orange)
+                            }
+                        }
                         
                         Spacer()
                         

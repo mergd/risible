@@ -16,6 +16,7 @@ final class AppSettings {
     private enum Keys {
         static let lastOpenedDate = "lastOpenedDate"
         static let defaultRefreshInterval = "defaultRefreshInterval"
+        static let hasCompletedOnboarding = "hasCompletedOnboarding"
     }
     
     var lastOpenedDate: Date? {
@@ -30,10 +31,19 @@ final class AppSettings {
     var defaultRefreshInterval: TimeInterval {
         get {
             let value = defaults.double(forKey: Keys.defaultRefreshInterval)
-            return value > 0 ? value : 3600 // Default 1 hour
+            return value > 0 ? value : 3600
         }
         set {
             defaults.set(newValue, forKey: Keys.defaultRefreshInterval)
+        }
+    }
+    
+    var hasCompletedOnboarding: Bool {
+        get {
+            defaults.bool(forKey: Keys.hasCompletedOnboarding)
+        }
+        set {
+            defaults.set(newValue, forKey: Keys.hasCompletedOnboarding)
         }
     }
     
@@ -41,5 +51,9 @@ final class AppSettings {
     
     func updateLastOpenedDate() {
         lastOpenedDate = Date()
+    }
+    
+    func resetOnboarding() {
+        hasCompletedOnboarding = false
     }
 }

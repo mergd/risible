@@ -15,6 +15,7 @@ struct AddCategorySheet: View {
     @State private var viewModel = SettingsViewModel()
     @State private var name = ""
     @State private var colorHex = "#007AFF"
+    @State private var selectedColor = Color(hex: "#007AFF") ?? .blue
     
     var body: some View {
         NavigationStack {
@@ -25,7 +26,7 @@ struct AddCategorySheet: View {
                         .textInputAutocapitalization(.words)
                         #endif
                     
-                    CategoryColorPicker(selectedColorHex: $colorHex)
+                    ColorPickerRow(selectedColor: $selectedColor, selectedColorHex: $colorHex)
                 }
             }
             .navigationTitle("New Category")

@@ -15,7 +15,7 @@ struct DiscoverView: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                if viewModel.isLoading {
+                if viewModel.isLoading && viewModel.curatedFeeds.isEmpty {
                     VStack(spacing: 16) {
                         ProgressView()
                             .scaleEffect(1.2)
@@ -31,6 +31,7 @@ struct DiscoverView: View {
                         Text("Check back later for curated feeds")
                     }
                 } else {
+                    #if os(iOS)
                     ScrollView {
                         VStack(spacing: 0) {
                             VStack(alignment: .leading, spacing: 8) {
@@ -47,7 +48,7 @@ struct DiscoverView: View {
                             
                             LazyVStack(spacing: 12) {
                                 ForEach(viewModel.curatedFeeds) { feed in
-                                    CuratedFeedCard(feed: feed) {
+                                    CuratedFeedCard(feed: feed, viewModel: viewModel) {
                                         Task {
                                             await viewModel.loadPreview(for: feed)
                                             showPreview = true
@@ -60,11 +61,45 @@ struct DiscoverView: View {
                             .padding(.bottom, 20)
                         }
                     }
+                    .refreshable {
+                        await viewModel.loadCuratedFeeds()
+                    }
+                    #else
+                    ScrollView {
+                        VStack(spacing: 0) {
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text("Popular Feeds")
+                                    .font(.title2.weight(.bold))
+                                Text("Discover high-quality RSS feeds from trusted sources")
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal, 20)
+                            .padding(.top, 16)
+                            .padding(.bottom, 20)
+                            
+                            LazyVStack(spacing: 12) {
+                                ForEach(viewModel.curatedFeeds) { feed in
+                                    CuratedFeedCard(feed: feed, viewModel: viewModel) {
+                                        Task {
+                                            await viewModel.loadPreview(for: feed)
+                                            showPreview = true
+                                        }
+                                    }
+                                    .transition(.opacity.combined(with: .move(edge: .bottom)))
+                                }
+                            }
+                            .padding(.horizontal, 20)
+                            .padding(.bottom, 20)
+                        }
+                    }
+                    #endif
                 }
             }
             .navigationTitle("Discover")
             #if os(iOS)
-            .navigationBarTitleDisplayMode(.large)
+            .navigationBarTitleDisplayMode(.inline)
             #endif
             .task {
                 if viewModel.curatedFeeds.isEmpty {

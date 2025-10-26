@@ -16,25 +16,19 @@ struct AddFeedSheet: View {
     
     @State private var viewModel = SettingsViewModel()
     @State private var url = ""
-    @State private var nickname = ""
-    @State private var isAdding = false
     @State private var errorMessage: String?
+    @State private var showPreview = false
     
     var body: some View {
         NavigationStack {
             Form {
-                Section("Feed Details") {
+                Section("Feed URL") {
                     TextField("Feed URL", text: $url)
                         #if os(iOS)
                         .textInputAutocapitalization(.never)
                         .keyboardType(.URL)
                         #endif
                         .autocorrectionDisabled()
-                    
-                    TextField("Nickname (optional)", text: $nickname)
-                        #if os(iOS)
-                        .textInputAutocapitalization(.words)
-                        #endif
                 }
                 
                 if let error = errorMessage {
@@ -53,16 +47,15 @@ struct AddFeedSheet: View {
                     Button("Cancel") {
                         dismiss()
                     }
-                    .disabled(isAdding)
                 }
                 
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    if isAdding {
+                    if viewModel.isLoadingPreview {
                         ProgressView()
                     } else {
-                        Button("Add") {
+                        Button("Next") {
                             Task {
-                                await addFeed()
+                                await loadPreview()
                             }
                         }
                         .disabled(url.isEmpty)
@@ -75,16 +68,15 @@ struct AddFeedSheet: View {
                     Button("Cancel") {
                         dismiss()
                     }
-                    .disabled(isAdding)
                 }
                 
                 ToolbarItem(placement: .confirmationAction) {
-                    if isAdding {
+                    if viewModel.isLoadingPreview {
                         ProgressView()
                     } else {
-                        Button("Add") {
+                        Button("Next") {
                             Task {
-                                await addFeed()
+                                await loadPreview()
                             }
                         }
                         .disabled(url.isEmpty)
@@ -93,21 +85,29 @@ struct AddFeedSheet: View {
             }
             #endif
         }
+        .sheet(isPresented: $showPreview) {
+            URLFeedPreviewSheet(
+                feedURL: url,
+                feedTitle: nil,
+                items: viewModel.previewItems,
+                isLoading: viewModel.isLoadingPreview,
+                viewModel: viewModel,
+                onRefresh: {
+                    await viewModel.loadPreview(for: url)
+                }
+            )
+        }
     }
     
-    private func addFeed() async {
-        isAdding = true
+    private func loadPreview() async {
         errorMessage = nil
+        await viewModel.loadPreview(for: url)
         
-        do {
-            let finalNickname = nickname.isEmpty ? nil : nickname
-            try await viewModel.addFeed(url: url, nickname: finalNickname, to: category, modelContext: modelContext)
-            dismiss()
-        } catch {
-            errorMessage = error.localizedDescription
+        if !viewModel.previewItems.isEmpty || !viewModel.isLoadingPreview {
+            showPreview = true
+        } else {
+            errorMessage = "Unable to load feed. Please check the URL."
         }
-        
-        isAdding = false
     }
 }
 

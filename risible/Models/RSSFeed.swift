@@ -16,6 +16,7 @@ final class RSSFeed {
     var nickname: String?
     var customRefreshInterval: TimeInterval?
     var enableNotifications: Bool = false
+    var isPaused: Bool = false
     
     @Relationship(deleteRule: .nullify)
     var category: Category?
@@ -29,7 +30,8 @@ final class RSSFeed {
         title: String,
         nickname: String? = nil,
         customRefreshInterval: TimeInterval? = nil,
-        enableNotifications: Bool = false
+        enableNotifications: Bool = false,
+        isPaused: Bool = false
     ) {
         self.id = id
         self.url = url
@@ -37,6 +39,7 @@ final class RSSFeed {
         self.nickname = nickname
         self.customRefreshInterval = customRefreshInterval
         self.enableNotifications = enableNotifications
+        self.isPaused = isPaused
     }
     
     var displayName: String {

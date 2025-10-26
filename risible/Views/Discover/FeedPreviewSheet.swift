@@ -24,6 +24,7 @@ struct FeedPreviewSheet: View {
     @State private var enableNotifications = false
     @State private var isAdding = false
     @State private var showSuccess = false
+    @State private var isRefreshing = false
     
     var body: some View {
         NavigationStack {
@@ -58,17 +59,31 @@ struct FeedPreviewSheet: View {
                 }
                 
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button {
-                        showCategoryModal = true
-                    } label: {
-                        if isAdding {
-                            ProgressView()
-                        } else {
-                            Image(systemName: "plus.circle.fill")
-                                .symbolRenderingMode(.hierarchical)
+                    HStack(spacing: 12) {
+                        if !isLoading {
+                            Button {
+                                Task {
+                                    await refreshPreview()
+                                }
+                            } label: {
+                                Image(systemName: "arrow.clockwise")
+                                    .symbolEffect(.rotate, isActive: isRefreshing)
+                            }
+                            .disabled(isRefreshing)
                         }
+                        
+                        Button {
+                            showCategoryModal = true
+                        } label: {
+                            if isAdding {
+                                ProgressView()
+                            } else {
+                                Image(systemName: "plus.circle.fill")
+                                    .symbolRenderingMode(.hierarchical)
+                            }
+                        }
+                        .disabled(isAdding)
                     }
-                    .disabled(isAdding)
                 }
             }
             #else
@@ -80,17 +95,31 @@ struct FeedPreviewSheet: View {
                 }
                 
                 ToolbarItem(placement: .primaryAction) {
-                    Button {
-                        showCategoryModal = true
-                    } label: {
-                        if isAdding {
-                            ProgressView()
-                        } else {
-                            Image(systemName: "plus.circle.fill")
-                                .symbolRenderingMode(.hierarchical)
+                    HStack(spacing: 12) {
+                        if !isLoading {
+                            Button {
+                                Task {
+                                    await refreshPreview()
+                                }
+                            } label: {
+                                Image(systemName: "arrow.clockwise")
+                                    .symbolEffect(.rotate, isActive: isRefreshing)
+                            }
+                            .disabled(isRefreshing)
                         }
+                        
+                        Button {
+                            showCategoryModal = true
+                        } label: {
+                            if isAdding {
+                                ProgressView()
+                            } else {
+                                Image(systemName: "plus.circle.fill")
+                                    .symbolRenderingMode(.hierarchical)
+                            }
+                        }
+                        .disabled(isAdding)
                     }
-                    .disabled(isAdding)
                 }
             }
             #endif
@@ -109,7 +138,8 @@ struct FeedPreviewSheet: View {
                     },
                     onCancel: {
                         showCategoryModal = false
-                    }
+                    },
+                    nickname: .constant("")
                 )
             }
             .alert("Added!", isPresented: $showSuccess) {
@@ -120,6 +150,9 @@ struct FeedPreviewSheet: View {
                 Text("\(feed.name) has been added to your feeds")
             }
         }
+        #if os(iOS)
+        .presentationDetents([.large])
+        #endif
     }
     
     private func addFeed() async {
@@ -143,6 +176,12 @@ struct FeedPreviewSheet: View {
         
         isAdding = false
     }
+    
+    private func refreshPreview() async {
+        isRefreshing = true
+        await viewModel.loadPreview(for: feed)
+        isRefreshing = false
+    }
 }
 
 struct CategorySelectionModal: View {
@@ -154,10 +193,11 @@ struct CategorySelectionModal: View {
     @Binding var isAdding: Bool
     let onAdd: () -> Void
     let onCancel: () -> Void
+    @Binding var nickname: String
     
     @Environment(\.dismiss) private var dismiss
     @State private var showAdvanced = false
-    
+
     private let refreshIntervals: [(label: String, value: TimeInterval)] = [
         ("15 minutes", 15 * 60),
         ("30 minutes", 30 * 60),
@@ -182,6 +222,13 @@ struct CategorySelectionModal: View {
                             }
                         }
                     }
+                }
+                
+                Section("Feed Details") {
+                    TextField("Nickname (optional)", text: $nickname)
+                        #if os(iOS)
+                        .textInputAutocapitalization(.words)
+                        #endif
                 }
                 
                 Section("Notifications") {
@@ -316,4 +363,195 @@ struct PreviewItemCard: View {
         viewModel: DiscoverViewModel()
     )
     .modelContainer(for: [Category.self, RSSFeed.self, FeedItem.self], inMemory: true)
+}
+
+// MARK: - URL Feed Preview Sheet
+
+struct URLFeedPreviewSheet: View {
+    let feedURL: String
+    let feedTitle: String?
+    let items: [RSSItemData]
+    let isLoading: Bool
+    let viewModel: SettingsViewModel
+    let onRefresh: () async -> Void
+    
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var modelContext
+    @Query(sort: \Category.sortOrder) private var categories: [Category]
+    
+    @State private var showCategoryModal = false
+    @State private var selectedCategory: Category?
+    @State private var selectedRefreshInterval: TimeInterval = 3600
+    @State private var enableNotifications = false
+    @State private var isAdding = false
+    @State private var showSuccess = false
+    @State private var isRefreshing = false
+    @State private var nickname = ""
+    
+    private var displayTitle: String {
+        feedTitle ?? "Feed Preview"
+    }
+    
+    var body: some View {
+        NavigationStack {
+            Group {
+                if isLoading {
+                    LoadingView(message: "Loading preview...")
+                } else if items.isEmpty {
+                    ContentUnavailableView(
+                        "No Articles",
+                        systemImage: "newspaper",
+                        description: Text("Unable to load feed preview")
+                    )
+                } else {
+                    ScrollView {
+                        LazyVStack(spacing: 16) {
+                            ForEach(items, id: \.link) { item in
+                                PreviewItemCard(item: item)
+                            }
+                        }
+                        .padding()
+                    }
+                }
+            }
+            .navigationTitle(displayTitle)
+            #if os(iOS)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("Close") {
+                        dismiss()
+                    }
+                }
+                
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    HStack(spacing: 12) {
+                        if !isLoading {
+                            Button {
+                                Task {
+                                    await refreshPreview()
+                                }
+                            } label: {
+                                Image(systemName: "arrow.clockwise")
+                                    .symbolEffect(.rotate, isActive: isRefreshing)
+                            }
+                            .disabled(isRefreshing)
+                        }
+                        
+                        Button {
+                            showCategoryModal = true
+                        } label: {
+                            if isAdding {
+                                ProgressView()
+                            } else {
+                                Image(systemName: "plus.circle.fill")
+                                    .symbolRenderingMode(.hierarchical)
+                            }
+                        }
+                        .disabled(isAdding || selectedCategory == nil)
+                    }
+                }
+            }
+            #else
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Close") {
+                        dismiss()
+                    }
+                }
+                
+                ToolbarItem(placement: .primaryAction) {
+                    HStack(spacing: 12) {
+                        if !isLoading {
+                            Button {
+                                Task {
+                                    await refreshPreview()
+                                }
+                            } label: {
+                                Image(systemName: "arrow.clockwise")
+                                    .symbolEffect(.rotate, isActive: isRefreshing)
+                            }
+                            .disabled(isRefreshing)
+                        }
+                        
+                        Button {
+                            showCategoryModal = true
+                        } label: {
+                            if isAdding {
+                                ProgressView()
+                            } else {
+                                Image(systemName: "plus.circle.fill")
+                                    .symbolRenderingMode(.hierarchical)
+                            }
+                        }
+                        .disabled(isAdding || selectedCategory == nil)
+                    }
+                }
+            }
+            #endif
+            .sheet(isPresented: $showCategoryModal) {
+                CategorySelectionModal(
+                    feed: CuratedFeed(
+                        name: displayTitle,
+                        description: "",
+                        url: feedURL,
+                        iconName: "rss.fill"
+                    ),
+                    categories: categories,
+                    selectedCategory: $selectedCategory,
+                    selectedRefreshInterval: $selectedRefreshInterval,
+                    enableNotifications: $enableNotifications,
+                    isAdding: $isAdding,
+                    onAdd: {
+                        Task {
+                            await addFeed()
+                        }
+                    },
+                    onCancel: {
+                        showCategoryModal = false
+                    },
+                    nickname: $nickname
+                )
+            }
+            .alert("Added!", isPresented: $showSuccess) {
+                Button("OK") {
+                    dismiss()
+                }
+            } message: {
+                Text("\(displayTitle) has been added to your feeds")
+            }
+        }
+        #if os(iOS)
+        .presentationDetents([.large])
+        #endif
+    }
+    
+    private func addFeed() async {
+        guard let category = selectedCategory else { return }
+        
+        isAdding = true
+        
+        do {
+            try await viewModel.addFeed(
+                url: feedURL,
+                nickname: nickname.isEmpty ? nil : nickname,
+                to: category,
+                modelContext: modelContext,
+                enableNotifications: enableNotifications,
+                refreshInterval: selectedRefreshInterval
+            )
+            showSuccess = true
+            showCategoryModal = false
+        } catch {
+            print("Error adding feed: \(error)")
+        }
+        
+        isAdding = false
+    }
+    
+    private func refreshPreview() async {
+        isRefreshing = true
+        await onRefresh()
+        isRefreshing = false
+    }
 }

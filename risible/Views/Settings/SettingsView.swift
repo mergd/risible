@@ -14,6 +14,7 @@ struct SettingsView: View {
     
     @State private var viewModel = SettingsViewModel()
     @State private var showAddCategory = false
+    let appSettings = AppSettings.shared
     
     var body: some View {
         NavigationStack {
@@ -76,6 +77,19 @@ struct SettingsView: View {
                     }
                 } header: {
                     Text("App Info")
+                }
+                
+                Section {
+                    Button(action: {
+                        appSettings.resetOnboarding()
+                    }) {
+                        Label("Reset Onboarding", systemImage: "arrow.counterclockwise")
+                            .foregroundStyle(.blue)
+                    }
+                } header: {
+                    Text("Onboarding")
+                } footer: {
+                    Text("View the onboarding screens again")
                 }
                 
                 Section {

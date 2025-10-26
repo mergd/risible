@@ -17,12 +17,18 @@ struct CategoryEditView: View {
     @State private var viewModel = SettingsViewModel()
     @State private var name: String
     @State private var colorHex: String
+    @State private var selectedColor: Color
     @State private var showAddFeed = false
     
     init(category: Category) {
         self.category = category
         _name = State(initialValue: category.name)
         _colorHex = State(initialValue: category.colorHex)
+        _selectedColor = State(initialValue: Color(hex: category.colorHex) ?? .blue)
+    }
+    
+    private var hasChanges: Bool {
+        name != category.name || colorHex != category.colorHex
     }
     
     var body: some View {
@@ -30,7 +36,7 @@ struct CategoryEditView: View {
             Section("Category Details") {
                 TextField("Name", text: $name)
                 
-                CategoryColorPicker(selectedColorHex: $colorHex)
+                ColorPickerRow(selectedColor: $selectedColor, selectedColorHex: $colorHex)
             }
             
             Section("Feeds") {
@@ -41,8 +47,18 @@ struct CategoryEditView: View {
                     ForEach(category.feeds) { feed in
                         NavigationLink(destination: FeedEditView(feed: feed)) {
                             VStack(alignment: .leading, spacing: 4) {
-                                Text(feed.displayName)
-                                    .font(.body)
+                                HStack(spacing: 6) {
+                                    Text(feed.displayName)
+                                        .font(.body)
+                                    
+                                    if feed.isPaused {
+                                        Image(systemName: "pause.circle.fill")
+                                            .font(.caption)
+                                            .foregroundStyle(.orange)
+                                    }
+                                    
+                                    Spacer()
+                                }
                                 
                                 Text(feed.url)
                                     .font(.caption)
@@ -66,19 +82,33 @@ struct CategoryEditView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
-                Button("Save") {
-                    saveChanges()
+                if hasChanges {
+                    Button("Save") {
+                        saveChanges()
+                    }
+                    .buttonStyle(.borderedProminent)
+                } else {
+                    Button("Save") {
+                        saveChanges()
+                    }
+                    .disabled(true)
                 }
-                .disabled(name.isEmpty)
             }
         }
         #else
         .toolbar {
             ToolbarItem(placement: .confirmationAction) {
-                Button("Save") {
-                    saveChanges()
+                if hasChanges {
+                    Button("Save") {
+                        saveChanges()
+                    }
+                    .buttonStyle(.borderedProminent)
+                } else {
+                    Button("Save") {
+                        saveChanges()
+                    }
+                    .disabled(true)
                 }
-                .disabled(name.isEmpty)
             }
         }
         #endif

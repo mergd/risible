@@ -6,11 +6,58 @@
 //
 
 import SwiftUI
+import SwiftData
 
 struct CuratedFeedCard: View {
     let feed: CuratedFeed
+    let viewModel: DiscoverViewModel
     let action: () -> Void
+    
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.modelContext) private var modelContext
+    @Query private var addedFeeds: [RSSFeed]
+    
+    init(feed: CuratedFeed, viewModel: DiscoverViewModel, action: @escaping () -> Void) {
+        self.feed = feed
+        self.viewModel = viewModel
+        self.action = action
+        
+        let feedURL = feed.url
+        let descriptor = FetchDescriptor<RSSFeed>(
+            predicate: #Predicate<RSSFeed> { rssFeed in
+                rssFeed.url == feedURL
+            }
+        )
+        _addedFeeds = Query(descriptor)
+    }
+    
+    private var isFeedAdded: Bool {
+        !addedFeeds.isEmpty
+    }
+    
+    private var trailingIconName: String {
+        isFeedAdded ? "checkmark.circle.fill" : "chevron.right"
+    }
+    
+    private var trailingIconSize: CGFloat {
+        isFeedAdded ? 16 : 13
+    }
+    
+    private var trailingIconColor: Color {
+        isFeedAdded ? .green : .secondary
+    }
+    
+    private var accessibilityHint: String {
+        isFeedAdded ? "Already added" : "Double tap to preview this feed"
+    }
+    
+    private var backgroundColor: Color {
+        colorScheme == .dark ? systemGray6.opacity(0.5) : .white
+    }
+    
+    private var shadowOpacity: Double {
+        colorScheme == .dark ? 0.3 : 0.06
+    }
     
     private var iconColor: Color {
         let colors: [Color] = [.blue, .purple, .pink, .orange, .green, .red, .indigo, .teal]
@@ -68,15 +115,15 @@ struct CuratedFeedCard: View {
                 
                 Spacer(minLength: 12)
                 
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(.quaternary)
+                Image(systemName: trailingIconName)
+                    .font(.system(size: trailingIconSize, weight: .semibold))
+                    .foregroundStyle(trailingIconColor)
             }
             .padding(16)
             .background {
                 RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .fill(colorScheme == .dark ? systemGray6.opacity(0.5) : .white)
-                    .shadow(color: .black.opacity(colorScheme == .dark ? 0.3 : 0.06), radius: 8, x: 0, y: 3)
+                    .fill(backgroundColor)
+                    .shadow(color: .black.opacity(shadowOpacity), radius: 8, x: 0, y: 3)
             }
             .overlay {
                 RoundedRectangle(cornerRadius: 16, style: .continuous)
@@ -84,9 +131,10 @@ struct CuratedFeedCard: View {
             }
         }
         .buttonStyle(DiscoverCardButtonStyle())
+        .disabled(isFeedAdded)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(feed.name). \(feed.description)")
-        .accessibilityHint("Double tap to preview this feed")
+        .accessibilityHint(accessibilityHint)
         .accessibilityAddTraits(.isButton)
     }
 }
@@ -107,7 +155,9 @@ struct DiscoverCardButtonStyle: ButtonStyle {
             url: "https://techcrunch.com/feed/",
             iconName: "laptopcomputer"
         ),
+        viewModel: DiscoverViewModel(),
         action: {}
     )
+    .modelContainer(for: [Category.self, RSSFeed.self, FeedItem.self], inMemory: true)
     .padding()
 }

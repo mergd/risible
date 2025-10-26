@@ -11,9 +11,11 @@ import SwiftData
 struct CategoryFeedView: View {
     @Environment(\.modelContext) private var modelContext
     let category: Category?
+    let viewModel: FeedViewModel
     
-    @State private var viewModel = FeedViewModel()
     @State private var isRefreshing = false
+    @State private var dismissedErrors: Set<String> = []
+    @State private var showErrorDialog = false
     
     private var feedItems: [FeedItem] {
         let descriptor: FetchDescriptor<FeedItem>
@@ -28,9 +30,6 @@ struct CategoryFeedView: View {
             )
         } else {
             descriptor = FetchDescriptor<FeedItem>(
-                predicate: #Predicate<FeedItem> { item in
-                    item.feed == nil || item.feed!.category == nil
-                },
                 sortBy: [SortDescriptor(\FeedItem.publishedDate, order: .reverse)]
             )
         }
@@ -38,17 +37,46 @@ struct CategoryFeedView: View {
         return (try? modelContext.fetch(descriptor)) ?? []
     }
     
+    private var categoryFeedsSet: Set<String> {
+        if let category = category {
+            return Set(category.feeds.map { $0.url })
+        }
+        return Set()
+    }
+    
+    private var activeFeedErrors: [FeedErrorInfo] {
+        var errors = viewModel.feedErrors.values.filter { error in
+            !dismissedErrors.contains(error.feedURL)
+        }
+        
+        if category != nil {
+            errors = errors.filter { error in
+                categoryFeedsSet.contains(error.feedURL)
+            }
+        }
+        
+        return errors
+    }
+    
     var body: some View {
         AdaptiveFeedLayout(
             feedItems: feedItems,
             category: category,
             isRefreshing: isRefreshing,
+            feedErrors: activeFeedErrors,
+            onDismissError: { feedURL in
+                dismissedErrors.insert(feedURL)
+            },
+            onShowErrorDialog: {
+                showErrorDialog = true
+            },
             refreshAction: {
                 #if os(iOS)
                 let feedbackGenerator = UINotificationFeedbackGenerator()
                 #endif
                 
                 isRefreshing = true
+                dismissedErrors.removeAll()
                 await viewModel.refreshFeeds(for: category, modelContext: modelContext)
                 isRefreshing = false
                 
@@ -57,6 +85,14 @@ struct CategoryFeedView: View {
                 #endif
             }
         )
+        .sheet(isPresented: $showErrorDialog) {
+            FeedErrorDialogView(
+                errors: activeFeedErrors,
+                onDismissError: { feedURL in
+                    dismissedErrors.insert(feedURL)
+                }
+            )
+        }
     }
 }
 
@@ -65,6 +101,9 @@ struct AdaptiveFeedLayout: View {
     let feedItems: [FeedItem]
     let category: Category?
     let isRefreshing: Bool
+    let feedErrors: [FeedErrorInfo]
+    let onDismissError: (String) -> Void
+    let onShowErrorDialog: () -> Void
     let refreshAction: () async -> Void
     
     private var columns: [GridItem] {
@@ -86,29 +125,109 @@ struct AdaptiveFeedLayout: View {
     }
     
     var body: some View {
+        #if os(iOS)
+        ScrollView {
+            VStack(spacing: 0) {
+                if feedItems.isEmpty && feedErrors.isEmpty {
+                    EmptyFeedView(category: category)
+                        .frame(minHeight: 400)
+                } else {
+                    VStack(spacing: 12) {
+                        if !feedErrors.isEmpty {
+                            if feedErrors.count > 3 {
+                                ErrorCountBanner(
+                                    count: feedErrors.count,
+                                    onTap: onShowErrorDialog
+                                )
+                                .padding(.horizontal, 20)
+                                .padding(.vertical, 8)
+                            } else {
+                                VStack(spacing: 8) {
+                                    ForEach(feedErrors, id: \.feedURL) { errorInfo in
+                                        FeedErrorBanner(
+                                            feedTitle: errorInfo.feedTitle,
+                                            errorMessage: errorInfo.displayMessage,
+                                            onDismiss: {
+                                                withAnimation(.easeInOut(duration: 0.2)) {
+                                                    onDismissError(errorInfo.feedURL)
+                                                }
+                                            }
+                                        )
+                                        .transition(.asymmetric(insertion: .scale(scale: 0.95).combined(with: .opacity), removal: .opacity))
+                                    }
+                                }
+                                .padding(.horizontal, 20)
+                                .padding(.vertical, 8)
+                            }
+                        }
+                        
+                        if !feedItems.isEmpty {
+                            LazyVGrid(columns: columns, spacing: 16) {
+                                ForEach(feedItems.prefix(50)) { item in
+                                    FeedItemCard(item: item)
+                                        .transition(.opacity.combined(with: .scale(scale: 0.95)))
+                                }
+                            }
+                            .padding(.horizontal, 20)
+                            .padding(.vertical, 16)
+                        }
+                    }
+                }
+            }
+        }
+        .refreshable {
+            await refreshAction()
+        }
+        #else
         ZStack {
-            if feedItems.isEmpty {
+            if feedItems.isEmpty && feedErrors.isEmpty {
                 EmptyFeedView(category: category)
                     .transition(.opacity)
             } else {
                 ScrollView {
-                    LazyVGrid(columns: columns, spacing: 16) {
-                        ForEach(feedItems.prefix(50)) { item in
-                            FeedItemCard(item: item)
-                                .transition(.opacity.combined(with: .scale(scale: 0.95)))
+                    VStack(spacing: 12) {
+                        if !feedErrors.isEmpty {
+                            if feedErrors.count > 3 {
+                                ErrorCountBanner(
+                                    count: feedErrors.count,
+                                    onTap: onShowErrorDialog
+                                )
+                                .padding(.horizontal, 20)
+                                .padding(.vertical, 8)
+                            } else {
+                                VStack(spacing: 8) {
+                                    ForEach(feedErrors, id: \.feedURL) { errorInfo in
+                                        FeedErrorBanner(
+                                            feedTitle: errorInfo.feedTitle,
+                                            errorMessage: errorInfo.displayMessage,
+                                            onDismiss: {
+                                                withAnimation(.easeInOut(duration: 0.2)) {
+                                                    onDismissError(errorInfo.feedURL)
+                                                }
+                                            }
+                                        )
+                                        .transition(.asymmetric(insertion: .scale(scale: 0.95).combined(with: .opacity), removal: .opacity))
+                                    }
+                                }
+                                .padding(.horizontal, 20)
+                                .padding(.vertical, 8)
+                            }
+                        }
+                        
+                        if !feedItems.isEmpty {
+                            LazyVGrid(columns: columns, spacing: 16) {
+                                ForEach(feedItems.prefix(50)) { item in
+                                    FeedItemCard(item: item)
+                                        .transition(.opacity.combined(with: .scale(scale: 0.95)))
+                                }
+                            }
+                            .padding(.horizontal, 20)
+                            .padding(.vertical, 16)
                         }
                     }
-                    .padding(.horizontal, 20)
-                    .padding(.vertical, 16)
                 }
-                #if os(iOS)
-                .refreshable {
-                    await refreshAction()
-                }
-                #endif
             }
             
-            #if os(macOS)
             if !feedItems.isEmpty {
                 VStack {
                     HStack {
@@ -128,9 +247,9 @@ struct AdaptiveFeedLayout: View {
                     Spacer()
                 }
             }
-            #endif
         }
         .animation(.spring(response: 0.4, dampingFraction: 0.8), value: feedItems.isEmpty)
+        #endif
     }
 }
 
@@ -187,6 +306,6 @@ struct EmptyFeedView: View {
     let config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
     let container = try! ModelContainer(for: schema, configurations: [config])
     
-    CategoryFeedView(category: nil)
+    CategoryFeedView(category: nil, viewModel: FeedViewModel())
         .modelContainer(container)
 }
