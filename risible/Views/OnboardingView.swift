@@ -20,17 +20,34 @@ struct OnboardingView: View {
             .ignoresSafeArea()
             
             VStack {
-                HStack {
+                HStack(spacing: 8) {
                     ForEach(0..<3, id: \.self) { index in
-                        Capsule()
+                        Circle()
                             .fill(index == currentPage ? Color.accentColor : Color.gray.opacity(0.3))
-                            .frame(height: 4)
+                            .frame(width: 8, height: 8)
                     }
                 }
-                .padding(.horizontal, 24)
                 .padding(.top, 16)
                 
                 Spacer()
+                
+                if currentPage < 2 {
+                    Button(action: {
+                        withAnimation {
+                            currentPage += 1
+                        }
+                    }) {
+                        Text("Next")
+                            .font(.headline)
+                            .foregroundStyle(.white)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 14)
+                            .background(Color.accentColor)
+                            .cornerRadius(10)
+                    }
+                    .padding(.horizontal, 24)
+                    .padding(.bottom, 32)
+                }
             }
         }
     }
