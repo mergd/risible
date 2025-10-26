@@ -42,8 +42,8 @@ struct DiscoverView: View {
                             }
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .padding(.horizontal, 20)
-                            .padding(.top, 8)
-                            .padding(.bottom, 16)
+                            .padding(.top, 16)
+                            .padding(.bottom, 20)
                             
                             LazyVStack(spacing: 12) {
                                 ForEach(viewModel.curatedFeeds) { feed in

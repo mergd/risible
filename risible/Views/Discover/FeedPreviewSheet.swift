@@ -18,8 +18,10 @@ struct FeedPreviewSheet: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \Category.sortOrder) private var categories: [Category]
     
-    @State private var showCategoryPicker = false
+    @State private var showCategoryModal = false
     @State private var selectedCategory: Category?
+    @State private var selectedRefreshInterval: TimeInterval = 3600
+    @State private var enableNotifications = false
     @State private var isAdding = false
     @State private var showSuccess = false
     
@@ -57,14 +59,7 @@ struct FeedPreviewSheet: View {
                 
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button {
-                        if categories.isEmpty {
-                            // Create default category and add
-                            Task {
-                                await addToNewCategory()
-                            }
-                        } else {
-                            showCategoryPicker = true
-                        }
+                        showCategoryModal = true
                     } label: {
                         if isAdding {
                             ProgressView()
@@ -86,14 +81,7 @@ struct FeedPreviewSheet: View {
                 
                 ToolbarItem(placement: .primaryAction) {
                     Button {
-                        if categories.isEmpty {
-                            // Create default category and add
-                            Task {
-                                await addToNewCategory()
-                            }
-                        } else {
-                            showCategoryPicker = true
-                        }
+                        showCategoryModal = true
                     } label: {
                         if isAdding {
                             ProgressView()
@@ -106,23 +94,23 @@ struct FeedPreviewSheet: View {
                 }
             }
             #endif
-            .confirmationDialog("Add to Category", isPresented: $showCategoryPicker) {
-                ForEach(categories) { category in
-                    Button(category.name) {
-                        selectedCategory = category
+            .sheet(isPresented: $showCategoryModal) {
+                CategorySelectionModal(
+                    feed: feed,
+                    categories: categories,
+                    selectedCategory: $selectedCategory,
+                    selectedRefreshInterval: $selectedRefreshInterval,
+                    enableNotifications: $enableNotifications,
+                    isAdding: $isAdding,
+                    onAdd: {
                         Task {
                             await addFeed()
                         }
+                    },
+                    onCancel: {
+                        showCategoryModal = false
                     }
-                }
-                
-                Button("Create New Category") {
-                    Task {
-                        await addToNewCategory()
-                    }
-                }
-                
-                Button("Cancel", role: .cancel) {}
+                )
             }
             .alert("Added!", isPresented: $showSuccess) {
                 Button("OK") {
@@ -140,31 +128,95 @@ struct FeedPreviewSheet: View {
         isAdding = true
         
         do {
-            try await viewModel.addFeed(feed, to: category, modelContext: modelContext)
+            try await viewModel.addFeed(
+                feed,
+                to: category,
+                modelContext: modelContext,
+                enableNotifications: enableNotifications,
+                refreshInterval: selectedRefreshInterval
+            )
             showSuccess = true
+            showCategoryModal = false
         } catch {
             print("Error adding feed: \(error)")
         }
         
         isAdding = false
     }
+}
+
+struct CategorySelectionModal: View {
+    let feed: CuratedFeed
+    let categories: [Category]
+    @Binding var selectedCategory: Category?
+    @Binding var selectedRefreshInterval: TimeInterval
+    @Binding var enableNotifications: Bool
+    @Binding var isAdding: Bool
+    let onAdd: () -> Void
+    let onCancel: () -> Void
     
-    private func addToNewCategory() async {
-        isAdding = true
-        
-        // Create default category
-        let category = Category(name: "General", colorHex: "#007AFF", sortOrder: 0)
-        modelContext.insert(category)
-        
-        do {
-            try modelContext.save()
-            try await viewModel.addFeed(feed, to: category, modelContext: modelContext)
-            showSuccess = true
-        } catch {
-            print("Error: \(error)")
+    @Environment(\.dismiss) private var dismiss
+    @State private var showAdvanced = false
+    
+    private let refreshIntervals: [(label: String, value: TimeInterval)] = [
+        ("15 minutes", 15 * 60),
+        ("30 minutes", 30 * 60),
+        ("1 hour", 3600),
+        ("3 hours", 3 * 3600),
+        ("6 hours", 6 * 3600),
+        ("12 hours", 12 * 3600),
+        ("24 hours", 24 * 3600),
+    ]
+    
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Add to Category") {
+                    if categories.isEmpty {
+                        Text("No categories available")
+                            .foregroundStyle(.secondary)
+                    } else {
+                        Picker("Category", selection: $selectedCategory) {
+                            ForEach(categories) { category in
+                                Text(category.name).tag(category as Category?)
+                            }
+                        }
+                    }
+                }
+                
+                Section("Notifications") {
+                    Toggle("Notify about new articles", isOn: $enableNotifications)
+                }
+                
+                Section {
+                    DisclosureGroup("Advanced Options", isExpanded: $showAdvanced) {
+                        Picker("Check for new articles every", selection: $selectedRefreshInterval) {
+                            ForEach(refreshIntervals, id: \.value) { interval in
+                                Text(interval.label).tag(interval.value)
+                            }
+                        }
+                        .pickerStyle(.menu)
+                    }
+                }
+            }
+            .navigationTitle("Add Feed")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") {
+                        onCancel()
+                    }
+                }
+                
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Add") {
+                        onAdd()
+                    }
+                    .disabled(selectedCategory == nil || isAdding)
+                }
+            }
         }
-        
-        isAdding = false
+        .presentationDetents([.medium])
     }
 }
 

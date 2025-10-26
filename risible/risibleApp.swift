@@ -30,6 +30,10 @@ struct risibleApp: App {
             MainTabView()
                 .onAppear {
                     AppSettings.shared.updateLastOpenedDate()
+                    
+                    Task {
+                        await SeedingService.seedDatabaseIfNeeded(modelContext: sharedModelContainer.mainContext)
+                    }
                 }
         }
         .modelContainer(sharedModelContainer)

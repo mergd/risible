@@ -18,50 +18,48 @@ struct FeedView: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                if !categories.isEmpty {
-                    ScrollViewReader { proxy in
-                        ScrollView(.horizontal, showsIndicators: false) {
-                            HStack(spacing: 12) {
+                ScrollViewReader { proxy in
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 12) {
+                            CategoryPill(
+                                title: "All",
+                                color: .blue,
+                                isSelected: selectedCategoryIndex == 0
+                            ) {
+                                #if os(iOS)
+                                let selectionFeedback = UISelectionFeedbackGenerator()
+                                selectionFeedback.selectionChanged()
+                                #endif
+                                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                    selectedCategoryIndex = 0
+                                }
+                            }
+                            .id(0)
+                            
+                            ForEach(Array(categories.enumerated()), id: \.element.id) { index, category in
                                 CategoryPill(
-                                    title: "All",
-                                    color: .blue,
-                                    isSelected: selectedCategoryIndex == 0
+                                    title: category.name,
+                                    color: category.color,
+                                    isSelected: selectedCategoryIndex == index + 1
                                 ) {
                                     #if os(iOS)
                                     let selectionFeedback = UISelectionFeedbackGenerator()
                                     selectionFeedback.selectionChanged()
                                     #endif
                                     withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                                        selectedCategoryIndex = 0
+                                        selectedCategoryIndex = index + 1
                                     }
                                 }
-                                .id(0)
-                                
-                                ForEach(Array(categories.enumerated()), id: \.element.id) { index, category in
-                                    CategoryPill(
-                                        title: category.name,
-                                        color: category.color,
-                                        isSelected: selectedCategoryIndex == index + 1
-                                    ) {
-                                        #if os(iOS)
-                                        let selectionFeedback = UISelectionFeedbackGenerator()
-                                        selectionFeedback.selectionChanged()
-                                        #endif
-                                        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                                            selectedCategoryIndex = index + 1
-                                        }
-                                    }
-                                    .id(index + 1)
-                                }
+                                .id(index + 1)
                             }
-                            .padding(.horizontal, 20)
-                            .padding(.vertical, 12)
                         }
-                        .background(.ultraThinMaterial)
-                        .onChange(of: selectedCategoryIndex) { _, newValue in
-                            withAnimation {
-                                proxy.scrollTo(newValue, anchor: .center)
-                            }
+                        .padding(.horizontal, 20)
+                        .padding(.vertical, 12)
+                    }
+                    .background(.ultraThinMaterial)
+                    .onChange(of: selectedCategoryIndex) { _, newValue in
+                        withAnimation {
+                            proxy.scrollTo(newValue, anchor: .center)
                         }
                     }
                 }

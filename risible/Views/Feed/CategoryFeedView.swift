@@ -22,12 +22,15 @@ struct CategoryFeedView: View {
             let categoryID = category.id
             descriptor = FetchDescriptor<FeedItem>(
                 predicate: #Predicate<FeedItem> { item in
-                    item.feed?.category?.id == categoryID
+                    item.feed != nil && item.feed!.category != nil && item.feed!.category!.id == categoryID
                 },
                 sortBy: [SortDescriptor(\FeedItem.publishedDate, order: .reverse)]
             )
         } else {
             descriptor = FetchDescriptor<FeedItem>(
+                predicate: #Predicate<FeedItem> { item in
+                    item.feed == nil || item.feed!.category == nil
+                },
                 sortBy: [SortDescriptor(\FeedItem.publishedDate, order: .reverse)]
             )
         }
@@ -135,43 +138,40 @@ struct EmptyFeedView: View {
     let category: Category?
     
     var body: some View {
-        VStack(spacing: 20) {
+        VStack(spacing: 12) {
             Image(systemName: category == nil ? "newspaper.fill" : "tray.fill")
-                .font(.system(size: 60))
+                .font(.system(size: 40))
                 .foregroundStyle(.tertiary)
-                .symbolEffect(.bounce, value: category)
             
-            VStack(spacing: 8) {
+            VStack(spacing: 4) {
                 Text("No Articles Yet")
-                    .font(.title2.weight(.semibold))
+                    .font(.headline)
                     .foregroundStyle(.primary)
                 
                 if category == nil {
-                    Text("Discover and add feeds to start reading!")
-                        .font(.body)
+                    Text("Discover and add feeds to start")
+                        .font(.caption)
                         .foregroundStyle(.secondary)
-                        .multilineTextAlignment(.center)
-                        .padding(.horizontal, 40)
                 } else {
-                    Text("Add RSS feeds to \"\(category?.name ?? "this category")\" in Settings")
-                        .font(.body)
+                    Text("Add RSS feeds in Settings")
+                        .font(.caption)
                         .foregroundStyle(.secondary)
-                        .multilineTextAlignment(.center)
-                        .padding(.horizontal, 40)
                 }
             }
+            .multilineTextAlignment(.center)
             
             #if os(iOS)
             if category == nil {
                 NavigationLink(destination: DiscoverView()) {
                     Label("Browse Feeds", systemImage: "safari.fill")
-                        .font(.body.weight(.semibold))
+                        .font(.caption.weight(.semibold))
                         .foregroundStyle(.white)
-                        .padding(.horizontal, 24)
-                        .padding(.vertical, 12)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 8)
                         .background(Color.accentColor, in: Capsule())
                 }
                 .buttonStyle(.plain)
+                .padding(.top, 4)
             }
             #endif
         }
