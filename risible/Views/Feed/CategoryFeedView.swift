@@ -129,55 +129,54 @@ struct AdaptiveFeedLayout: View {
     
     var body: some View {
         #if os(iOS)
-        ScrollView {
-            VStack(spacing: 0) {
-                if feedItems.isEmpty && feedErrors.isEmpty {
-                    EmptyFeedView(category: category)
-                        .frame(minHeight: 400)
-                } else {
-                    VStack(spacing: 12) {
-                        if !feedErrors.isEmpty {
-                            if feedErrors.count > 3 {
-                                ErrorCountBanner(
-                                    count: feedErrors.count,
-                                    onTap: onShowErrorDialog
-                                )
-                                .padding(.horizontal, 20)
-                                .padding(.vertical, 8)
-                            } else {
-                                VStack(spacing: 8) {
-                                    ForEach(feedErrors, id: \.feedURL) { errorInfo in
-                                        FeedErrorBanner(
-                                            feedTitle: errorInfo.feedTitle,
-                                            errorMessage: errorInfo.displayMessage,
-                                            onDismiss: {
-                                                withAnimation(.easeInOut(duration: 0.2)) {
-                                                    onDismissError(errorInfo.feedURL)
-                                                }
+        VStack(spacing: 0) {
+            if feedItems.isEmpty && feedErrors.isEmpty {
+                EmptyFeedView(category: category)
+                    .frame(minHeight: 400)
+            } else {
+                VStack(spacing: 12) {
+                    if !feedErrors.isEmpty {
+                        if feedErrors.count > 3 {
+                            ErrorCountBanner(
+                                count: feedErrors.count,
+                                onTap: onShowErrorDialog
+                            )
+                            .padding(.horizontal, 20)
+                            .padding(.vertical, 8)
+                        } else {
+                            VStack(spacing: 8) {
+                                ForEach(feedErrors, id: \.feedURL) { errorInfo in
+                                    FeedErrorBanner(
+                                        feedTitle: errorInfo.feedTitle,
+                                        errorMessage: errorInfo.displayMessage,
+                                        onDismiss: {
+                                            withAnimation(.easeInOut(duration: 0.2)) {
+                                                onDismissError(errorInfo.feedURL)
                                             }
-                                        )
-                                        .transition(.asymmetric(insertion: .scale(scale: 0.95).combined(with: .opacity), removal: .opacity))
-                                    }
-                                }
-                                .padding(.horizontal, 20)
-                                .padding(.vertical, 8)
-                            }
-                        }
-                        
-                        if !feedItems.isEmpty {
-                            LazyVGrid(columns: columns, spacing: 16) {
-                                ForEach(feedItems.prefix(50)) { item in
-                                    FeedItemCard(item: item, hiddenItemURLs: $hiddenItemURLs)
-                                        .transition(.opacity.combined(with: .scale(scale: 0.95)))
+                                        }
+                                    )
+                                    .transition(.asymmetric(insertion: .scale(scale: 0.95).combined(with: .opacity), removal: .opacity))
                                 }
                             }
                             .padding(.horizontal, 20)
-                            .padding(.vertical, 16)
+                            .padding(.vertical, 8)
                         }
+                    }
+                    
+                    if !feedItems.isEmpty {
+                        LazyVGrid(columns: columns, spacing: 16) {
+                            ForEach(feedItems.prefix(50)) { item in
+                                FeedItemCard(item: item, hiddenItemURLs: $hiddenItemURLs)
+                                    .transition(.opacity.combined(with: .scale(scale: 0.95)))
+                            }
+                        }
+                        .padding(.horizontal, 20)
+                        .padding(.vertical, 16)
                     }
                 }
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .refreshable {
             await refreshAction()
         }

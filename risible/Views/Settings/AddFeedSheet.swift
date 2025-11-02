@@ -24,6 +24,7 @@ struct AddFeedSheet: View {
     @State private var feedTitle: String?
     @State private var feedDescription: String?
     @State private var feedLoaded = false
+    @State private var showPreviewSheet = false
     
     @Query(sort: \Category.sortOrder) private var categories: [Category]
     
@@ -47,112 +48,106 @@ struct AddFeedSheet: View {
     
     var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 0) {
-                    Form {
-                        Section("Feed URL") {
-                            TextField("Feed URL", text: $url)
-                                #if os(iOS)
-                                .textInputAutocapitalization(.never)
-                                .keyboardType(.URL)
-                                #endif
-                                .autocorrectionDisabled()
-                        }
-                        
-                        if let error = viewModel.errorMessage {
-                            Section {
-                                Text(error)
-                                    .foregroundStyle(.red)
-                                    .font(.caption)
+            Form {
+                Section("Feed URL") {
+                    TextField("Feed URL", text: $url)
+                        #if os(iOS)
+                        .textInputAutocapitalization(.never)
+                        .keyboardType(.URL)
+                        #endif
+                        .autocorrectionDisabled()
+                        .onSubmit {
+                            if !url.isEmpty && !feedLoaded && !viewModel.isLoadingPreview {
+                                Task {
+                                    await previewFeed()
+                                }
                             }
                         }
-                        
-                        if feedLoaded, let title = feedTitle {
-                            Section("Feed Info") {
-                                VStack(alignment: .leading, spacing: 8) {
-                                    VStack(alignment: .leading, spacing: 4) {
-                                        Text("Title")
-                                            .font(.caption)
-                                            .foregroundStyle(.secondary)
-                                        Text(title)
-                                            .font(.body.weight(.semibold))
-                                    }
+                }
+                
+                if let error = viewModel.errorMessage {
+                    Section {
+                        Text(error)
+                            .foregroundStyle(.red)
+                            .font(.caption)
+                    }
+                }
+                
+                if viewModel.isLoadingPreview {
+                    Section {
+                        HStack {
+                            Spacer()
+                            ProgressView()
+                            Spacer()
+                        }
+                    }
+                }
+                
+                if feedLoaded, let title = feedTitle {
+                    Section("Feed Preview") {
+                        Button(action: { showPreviewSheet = true }) {
+                            HStack {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(title)
+                                        .font(.body.weight(.semibold))
+                                        .foregroundStyle(.primary)
                                     
                                     if let description = feedDescription {
-                                        Divider()
-                                            .padding(.vertical, 8)
-                                        
-                                        VStack(alignment: .leading, spacing: 4) {
-                                            Text("Description")
-                                                .font(.caption)
-                                                .foregroundStyle(.secondary)
-                                            Text(description)
-                                                .font(.caption)
-                                                .lineLimit(3)
-                                        }
+                                        Text(description)
+                                            .font(.caption)
+                                            .lineLimit(1)
+                                            .foregroundStyle(.secondary)
                                     }
                                 }
-                                .padding(.vertical, 4)
+                                
+                                Spacer()
+                                
+                                Image(systemName: "chevron.right")
+                                    .foregroundStyle(.secondary)
                             }
-                            
-                            Section("Category") {
-                                if categories.isEmpty {
-                                    Text("No categories available")
-                                        .foregroundStyle(.secondary)
-                                } else {
-                                    Picker("Category", selection: Binding(
-                                        get: { category },
-                                        set: { _ in }
-                                    )) {
-                                        ForEach(categories) { cat in
-                                            Text(cat.name).tag(cat)
-                                        }
-                                    }
-                                }
-                            }
-                            
-                            Section("Feed Details") {
-                                TextField("Nickname (optional)", text: $nickname)
-                                    #if os(iOS)
-                                    .textInputAutocapitalization(.words)
-                                    #endif
-                            }
-                            
-                            Section("Notifications") {
-                                Toggle("Notify about new articles", isOn: $enableNotifications)
-                            }
-                            
-                            Section {
-                                DisclosureGroup("Advanced Options") {
-                                    Picker("Check for new articles every", selection: $selectedRefreshInterval) {
-                                        ForEach(refreshIntervals, id: \.value) { interval in
-                                            Text(interval.label).tag(interval.value)
-                                        }
-                                    }
-                                    .pickerStyle(.menu)
+                        }
+                    }
+                    
+                    Section("Category") {
+                        if categories.isEmpty {
+                            Text("No categories available")
+                                .foregroundStyle(.secondary)
+                        } else {
+                            Picker("Category", selection: Binding(
+                                get: { category },
+                                set: { _ in }
+                            )) {
+                                ForEach(categories) { cat in
+                                    Text(cat.name).tag(cat)
                                 }
                             }
                         }
                     }
                     
-                    if feedLoaded && !viewModel.previewItems.isEmpty {
-                        VStack(alignment: .leading, spacing: 12) {
-                            Text("Preview")
-                                .font(.headline)
-                                .padding(.horizontal)
-                                .padding(.top, 16)
-                            
-                            LazyVStack(spacing: 12) {
-                                ForEach(viewModel.previewItems, id: \.link) { item in
-                                    PreviewItemCard(item: item)
+                    Section("Feed Details") {
+                        TextField("Nickname (optional)", text: $nickname)
+                            #if os(iOS)
+                            .textInputAutocapitalization(.words)
+                            #endif
+                    }
+                    
+                    Section("Notifications") {
+                        Toggle("Notify about new articles", isOn: $enableNotifications)
+                    }
+                    
+                    Section {
+                        DisclosureGroup("Advanced Options") {
+                            Picker("Check for new articles every", selection: $selectedRefreshInterval) {
+                                ForEach(refreshIntervals, id: \.value) { interval in
+                                    Text(interval.label).tag(interval.value)
                                 }
                             }
-                            .padding(.horizontal)
-                            .padding(.bottom)
+                            .pickerStyle(.menu)
                         }
                     }
                 }
             }
+            .background(Color(.systemBackground))
             .navigationTitle("Add Feed")
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
@@ -174,21 +169,7 @@ struct AddFeedSheet: View {
             #endif
             .safeAreaInset(edge: .bottom) {
                 VStack(spacing: 12) {
-                    if !feedLoaded {
-                        Button(action: {
-                            Task {
-                                await previewFeed()
-                            }
-                        }) {
-                            if viewModel.isLoadingPreview {
-                                ProgressView()
-                            } else {
-                                Text("Preview Form")
-                            }
-                        }
-                        .buttonStyle(.bordered)
-                        .disabled(url.isEmpty || viewModel.isLoadingPreview)
-                    } else {
+                    if feedLoaded {
                         Button(action: {
                             Task {
                                 await submitFeed()
@@ -211,6 +192,18 @@ struct AddFeedSheet: View {
                         Color(colorScheme == .dark ? systemGray6.opacity(0.5) : .white)
                     }
                 }
+            }
+            .sheet(isPresented: $showPreviewSheet) {
+                URLFeedPreviewSheet(
+                    feedURL: url,
+                    feedTitle: feedTitle,
+                    items: viewModel.previewItems,
+                    isLoading: viewModel.isLoadingPreview,
+                    viewModel: viewModel,
+                    onRefresh: {
+                        await previewFeed()
+                    }
+                )
             }
         }
     }

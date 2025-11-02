@@ -17,79 +17,100 @@ struct FeedView: View {
     @State private var showAddFeedSheet = false
     @State private var selectedCategory: Category?
     @State private var hiddenItemURLs: Set<String> = []
+    @State private var showHeader = true
+    @State private var lastScrollPosition: CGFloat = 0
     
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
+                // Header with title
                 HStack(spacing: 12) {
-                    ScrollViewReader { proxy in
-                        ScrollView(.horizontal, showsIndicators: false) {
-                            HStack(spacing: 8) {
-                                CategoryPill(
-                                    title: "All",
-                                    color: .blue,
-                                    isSelected: selectedCategoryIndex == 0
-                                ) {
-                                    #if os(iOS)
-                                    let selectionFeedback = UISelectionFeedbackGenerator()
-                                    selectionFeedback.selectionChanged()
-                                    #endif
-                                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                                        selectedCategoryIndex = 0
-                                    }
-                                }
-                                .id(0)
-                                
-                                ForEach(Array(categories.enumerated()), id: \.element.id) { index, category in
+                    Text("Risible")
+                        .font(.system(size: 28, weight: .bold))
+                        .foregroundStyle(.primary)
+                    Spacer()
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                
+                // Collapsible category pills
+                if showHeader {
+                    HStack(spacing: 12) {
+                        ScrollViewReader { proxy in
+                            ScrollView(.horizontal, showsIndicators: false) {
+                                HStack(spacing: 8) {
                                     CategoryPill(
-                                        title: category.name,
-                                        color: category.color,
-                                        isSelected: selectedCategoryIndex == index + 1
+                                        title: "All",
+                                        color: .blue,
+                                        isSelected: selectedCategoryIndex == 0
                                     ) {
                                         #if os(iOS)
                                         let selectionFeedback = UISelectionFeedbackGenerator()
                                         selectionFeedback.selectionChanged()
                                         #endif
                                         withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                                            selectedCategoryIndex = index + 1
+                                            selectedCategoryIndex = 0
                                         }
                                     }
-                                    .id(index + 1)
+                                    .id(0)
+                                    
+                                    ForEach(Array(categories.enumerated()), id: \.element.id) { index, category in
+                                        CategoryPill(
+                                            title: category.name,
+                                            color: category.color,
+                                            isSelected: selectedCategoryIndex == index + 1
+                                        ) {
+                                            #if os(iOS)
+                                            let selectionFeedback = UISelectionFeedbackGenerator()
+                                            selectionFeedback.selectionChanged()
+                                            #endif
+                                            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                                selectedCategoryIndex = index + 1
+                                            }
+                                        }
+                                        .id(index + 1)
+                                    }
+                                }
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 8)
+                            }
+                            .onChange(of: selectedCategoryIndex) { _, newValue in
+                                withAnimation {
+                                    proxy.scrollTo(newValue, anchor: .center)
                                 }
                             }
-                            .padding(.horizontal, 16)
-                            .padding(.vertical, 8)
                         }
-                        .onChange(of: selectedCategoryIndex) { _, newValue in
-                            withAnimation {
-                                proxy.scrollTo(newValue, anchor: .center)
+                        
+                        Button {
+                            if selectedCategoryIndex == 0 {
+                                selectedCategory = categories.first ?? createDefaultCategory()
+                            } else {
+                                selectedCategory = categories[safe: selectedCategoryIndex - 1]
                             }
+                            showAddFeedSheet = true
+                        } label: {
+                            Image(systemName: "plus")
+                                .font(.system(size: 16))
                         }
+                        .foregroundStyle(.blue)
+                        .padding(.trailing, 16)
                     }
-                    
-                    Button {
-                        if selectedCategoryIndex == 0 {
-                            selectedCategory = categories.first ?? createDefaultCategory()
-                        } else {
-                            selectedCategory = categories[safe: selectedCategoryIndex - 1]
-                        }
-                        showAddFeedSheet = true
-                    } label: {
-                        Image(systemName: "plus")
-                            .font(.system(size: 16))
-                    }
-                    .foregroundStyle(.blue)
-                    .padding(.trailing, 16)
+                    .background(.ultraThinMaterial)
+                    .transition(.move(edge: .top).combined(with: .opacity))
                 }
-                .background(.ultraThinMaterial)
                 
                 TabView(selection: $selectedCategoryIndex) {
-                    CategoryFeedView(category: nil, viewModel: viewModel)
-                        .tag(0)
+                    ScrollTracker(showHeader: $showHeader, lastScrollPosition: $lastScrollPosition) {
+                        CategoryFeedView(category: nil, viewModel: viewModel)
+                    }
+                    .tag(0)
                     
                     ForEach(Array(categories.enumerated()), id: \.element.id) { index, category in
-                        CategoryFeedView(category: category, viewModel: viewModel)
-                            .tag(index + 1)
+                        ScrollTracker(showHeader: $showHeader, lastScrollPosition: $lastScrollPosition) {
+                            CategoryFeedView(category: category, viewModel: viewModel)
+                        }
+                        .tag(index + 1)
                     }
                 }
                 #if os(iOS)
@@ -98,10 +119,6 @@ struct FeedView: View {
                 .tabViewStyle(.automatic)
                 #endif
             }
-            .navigationTitle("Risible")
-            #if os(iOS)
-            .navigationBarTitleDisplayMode(.inline)
-            #endif
             .sheet(isPresented: $showAddFeedSheet) {
                 if let category = selectedCategory {
                     AddFeedSheet(category: category)
@@ -120,6 +137,44 @@ struct FeedView: View {
 extension Array {
     subscript(safe index: Int) -> Element? {
         return index >= 0 && index < count ? self[index] : nil
+    }
+}
+
+struct ScrollTracker<Content: View>: View {
+    @Binding var showHeader: Bool
+    @Binding var lastScrollPosition: CGFloat
+    let content: Content
+    
+    init(showHeader: Binding<Bool>, lastScrollPosition: Binding<CGFloat>, @ViewBuilder content: () -> Content) {
+        self._showHeader = showHeader
+        self._lastScrollPosition = lastScrollPosition
+        self.content = content()
+    }
+    
+    var body: some View {
+        ScrollViewReader { proxy in
+            ScrollView {
+                VStack {
+                    content
+                }
+                .id("scrollContent")
+            }
+            .onScrollGeometryChange(for: CGFloat.self) { geometry in
+                geometry.contentOffset.y
+            } action: { oldValue, newValue in
+                let scrollDelta = newValue - oldValue
+                
+                if scrollDelta > 50 && showHeader {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        showHeader = false
+                    }
+                } else if scrollDelta < -50 && !showHeader {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        showHeader = true
+                    }
+                }
+            }
+        }
     }
 }
 
